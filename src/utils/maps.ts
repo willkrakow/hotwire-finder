@@ -1,4 +1,10 @@
-import type { Coordinates as LatLngCoordinateType, Circle } from "../types";
+import { minBy, sum } from "lodash";
+import type {
+  Coordinates as LatLngCoordinateType,
+  Circle,
+  Poi,
+  Coordinates,
+} from "../types";
 
 export const EARTH_RADIUS_IN_METERS = 6378137;
 
@@ -61,7 +67,7 @@ export const destination = (
     point.latitude,
     point.longitude
   ).radians;
-  const bearingRadians = toRadians(bearingDegrees);
+  const bearingRadians = degreeToRadian(bearingDegrees);
   const lat2 = Math.asin(
     Math.sin(lat1) * Math.cos(angularDistance) +
       Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearingRadians)
@@ -97,7 +103,7 @@ export const midpoint = (
   );
   const lng3 = lng1 + Math.atan2(By, Math.cos(lat1) + Bx);
 
-  return { latitude: toDegrees(lat3), longitude: toDegrees(lng3) };
+  return { latitude: radianToDegree(lat3), longitude: radianToDegree(lng3) };
 };
 
 export const findMidpointOfCircles = (circle1: Circle, circle2: Circle) => {
@@ -155,9 +161,8 @@ export const averagePointOfCircles = (pois: Circle[]) => {
 
   return sphericalAveragePoint(averages);
 };
-
-export const toRadians = (d: number) => (d * Math.PI) / 180;
-export const toDegrees = (r: number) => (r * 180) / Math.PI;
+export const degreeToRadian = (d: number) => (d * Math.PI) / 180;
+export const radianToDegree = (r: number) => (r * 180) / Math.PI;
 
 class Coordinate {
   latitude: number;
@@ -176,8 +181,39 @@ class Coordinate {
 
   get radians() {
     return {
-      latitude: toRadians(this.latitude),
-      longitude: toRadians(this.longitude),
+      latitude: degreeToRadian(this.latitude),
+      longitude: degreeToRadian(this.longitude),
     };
   }
+}
+
+type Hotel = {
+  name: string;
+  [key: string]: any;
+  geometry: {
+    location: Coordinates;
+  };
+};
+
+export function getClosestMatchToPois(pois: Poi[], hotels: Hotel[]) {
+  const hotelDistanceDiffs = hotels.map((hotel) => {
+    const hotelToPoiDistances = pois.map((poi) => {
+      const poiRadians = {
+        latitude: degreeToRadian(poi.coordinates.latitude),
+        longitude: degreeToRadian(poi.coordinates.longitude),
+      };
+      const hotelRadians = {
+        latitude: degreeToRadian(hotel.geometry.location.latitude),
+        longitude: degreeToRadian(hotel.geometry.location.longitude),
+      };
+
+      return haversineFormula(poiRadians, hotelRadians) - poi.distance.value;
+    });
+    return {
+      ...hotel,
+      hotelToPoiDistances,
+    };
+  });
+
+  return minBy(hotelDistanceDiffs, (h) => sum(h.hotelToPoiDistances));
 }
